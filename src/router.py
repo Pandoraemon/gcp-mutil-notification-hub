@@ -121,7 +121,7 @@ class Router:
         """投递成功后才登记，使后续的真重复被抑制。
 
         仅覆盖同实例内的重复（max_instances=2 时最坏仍可能重复一次，
-        属 v1 已知限制；跨实例强一致去重见 docs/architecture.md 的 v2 规划）。
+        属 v1 已知限制；跨实例强一致去重见 docs/internal/architecture.md 的 v2 规划）。
         """
         self._seen[alert.dedup_key] = time.time()
         while len(self._seen) > DEDUP_CAPACITY:

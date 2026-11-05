@@ -1,7 +1,7 @@
 # 创建 IM 群机器人（飞书 / 企业微信 / 钉钉）
 
 部署前需要在**所选平台**的告警群里创建一个群机器人，拿到 Webhook（钉钉还要加签密钥）。
-三个平台任选其一，部署时三选一（见 [README · 选择通知渠道](../README.md#选择通知渠道三选一)）。
+三个平台任选其一，部署时三选一（见 [README · 选择通知渠道](../README.md#部署时会问什么)）。
 
 > [!IMPORTANT]
 > **Webhook 本身就是凭据**：拿到 URL 的任何人都能往群里发消息。只把它交给部署脚本（脚本会存进 Secret Manager），
@@ -162,7 +162,7 @@ unset WEBHOOK SECRET URL
 
 - **同平台换 Webhook 或密钥**：`./scripts/configure.sh --section=channel` → 选择「输入新凭据」。会写入新 Secret 版本并强制函数重启，立即生效。
 - **换平台**（如飞书 → 钉钉）：同样用 `configure.sh --section=channel` 选新渠道并输入新凭据。旧渠道的 Secret 会保留（不再挂载），
-  需要回收时执行 `./scripts/teardown-gcloud.sh --delete-secrets` 或按 `terraform output next_steps` 提示手工删除。
+  需要回收时执行 `./scripts/teardown-gcloud.sh --delete-secrets`。
 
 相关文档：[完整指南 · 选择通知渠道](full-guide.md#选择通知渠道三选一) ·
 [故障排查 · 三渠道错误码速查](troubleshooting.md#27-三渠道错误码速查) · [修改配置（configure.sh）](full-guide.md#修改配置configuresh)

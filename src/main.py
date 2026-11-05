@@ -199,7 +199,7 @@ def handle_pubsub(cloud_event: Any) -> None:
             raise                                # nack → Pub/Sub 重试 → 5 次后进 DLQ
         except PermanentError as exc:
             # 例如签名密钥错误、webhook 已失效：重试只会浪费配额，
-            # 但必须留下 ERROR 日志，并由"监控的监控"告警（见 docs/architecture.md）
+            # 但必须留下 ERROR 日志，并由"监控的监控"告警（见 docs/internal/architecture.md）
             logger.exception('Permanent send failure, dropping (no retry)',
                              extra={'reason': 'permanent_send_failure', 'alert_type': alert.type,
                                     **code_fields(Config.NOTIFY_CHANNEL, exc)})

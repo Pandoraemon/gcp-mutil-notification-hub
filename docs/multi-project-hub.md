@@ -14,7 +14,7 @@ Hub 模式允许在中心项目（Hub）部署一套转发器，集中收集多�
 
 ## 架构与资源创建
 
-Hub 模式支持按**明确清单（清单模式，`HUB_SOURCE_PROJECTS` / `source_projects`）**或同时提供**文件夹/组织节点（范围模式，`HUB_SCOPE` / `source_scope`）**汇入源项目。gcloud 部署路径与 Terraform 路径在资源创建上完全对等。
+Hub 模式支持按**明确清单（清单模式，`HUB_SOURCE_PROJECTS`）**或同时提供**文件夹/组织节点（范围模式，`HUB_SCOPE`）**汇入源项目。
 
 对于**每一个接入的源项目**，将自动创建或配置以下资源：
 1. **API 启用**：启用 `monitoring.googleapis.com`、`logging.googleapis.com`、`servicehealth.googleapis.com` 及 `pubsub.googleapis.com`。
@@ -58,16 +58,8 @@ export HUB_SCOPE="folders/12345678"
 ```
 （`deploy-gcloud.sh` 会自动将传入的纯 ID 转换为内部使用的 `id=number;id=number` 格式）
 
-### Terraform 路径
-在 `terraform.tfvars` 中配置：
-```hcl
-source_projects = ["src-project-a", "src-project-b"]
-source_scope    = "folders/12345678"  # 可选，非空则开启范围聚合
-```
-执行 `terraform apply` 即可完成变更。因为客户已有告警策略不归 Terraform 托管，这属于"对等例外"，如果你要将它们绑定至 Hub 渠道，仍然可以使用 `configure.sh` 的 ⑧ 菜单中的 `b` 操作。
-
 ## 断开源项目
-当你通过向导 `[r] 移除源项目` 或从 Terraform `source_projects` 列表里删除项目时，系统会自动执行清理：
+当你通过向导 `[r] 移除源项目` 删除项目时，系统会自动执行清理：
 1. 先从该源项目已绑定的客户自有策略中移除对 Hub 渠道的引用。
 2. 摘除由 Hub 自动在源项目创建的通知渠道与日志 sink。
 3. 移除该源项目在 Hub topic 上的 `pubsub.publisher` IAM 授权。

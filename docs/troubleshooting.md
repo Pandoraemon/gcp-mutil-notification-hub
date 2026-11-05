@@ -29,8 +29,7 @@
   - [4.1 告警风暴时消息丢失 / 限流（429 / 45009 / 130101）](#41-告警风暴时消息丢失--限流429--45009--130101)
   - [4.2 DLQ 里堆了消息](#42-dlq-里堆了消息)
 - [5. 多群路由](#5-多群路由)
-- [6. Terraform 相关](#6-terraform-相关)
-- [7. 修改配置（configure.sh）与重跑部署](#7-修改配置configuresh与重跑部署)
+- [6. 修改配置（configure.sh）与重跑部署](#6-修改配置configuresh与重跑部署)
 - [附：日志字段速查](#附日志字段速查)
 
 ## 先做这三件事
@@ -334,7 +333,7 @@ gcloud functions deploy gcp-alerts-to-feishu --region=asia-east1 --gen2 \
 > 自检可能发到**旧群**并判成功。要立即生效，改任一 env 值（如上）或重新部署源码。
 > 更省事的做法：`./scripts/configure.sh --section=channel` 选「输入新凭据」（写入新版本并强制拉新 revision）；
 > 若已经用 `gcloud secrets versions add` 换了值，直接运行 `./scripts/configure.sh`，在「无变化」处选择强制重启即可，
-> 见[第 7 节](#7-修改配置configuresh与重跑部署)。
+> 见[第 6 节](#6-修改配置configuresh与重跑部署)。
 
 > 签名算法细节：key = `"{timestamp}\n{secret}"`，message = **空字节串**，HMAC-SHA256 后 base64。
 > 这个"用密钥当 key、拿空串当消息"的用法很反直觉，自己实现时极易写反。
@@ -592,8 +591,7 @@ gcloud pubsub subscriptions pull gcp-alerts-dlq-sub --limit=1 --format=json \
 `replay_count > 2` 时函数会直接丢弃并记 ERROR —— 这是为了阻断
 "DLQ → 重放 → 再入 DLQ"的死循环。真要突破，先修好根因再改 `MAX_REPLAY_COUNT`。
 
-如果配置了 `OPS_EMAIL` / `ops_email`，DLQ 积压超过 10 分钟会由 `GCP Alerts Hub - DLQ Backlog` 策略发邮件
-（见 [architecture.md · 监控的监控](architecture.md#监控的监控自监控)）。
+如果部署时填了运维通知邮箱（`OPS_EMAIL`），DLQ 积压超过 10 分钟会由 `GCP Alerts Hub - DLQ Backlog` 策略发邮件提醒。
 
 #### DLQ 是空的，但消息确实丢了
 
@@ -671,113 +669,7 @@ FEISHU_BILLING_SECRET=feishu-billing-secret:latest"
 
 ---
 
-## 6. Terraform 相关
-
-
-### `Error 409: already exists` on secret
-
-`terraform/secrets.tf` 应当只有 `data` 源，不能有 `google_secret_manager_secret` 资源。
-密文归部署脚本管，Terraform 只管 IAM —— 见
-[deployment-comparison.md](deployment-comparison.md#密钥所有权两条路径共同的约定)。
-
-### `terraform plan` 显示函数要 replace
-
-看是哪个字段触发的。`build_config.source` 变了是正常的（源码有改动）；
-`location`、`name` 变了说明配置被改坏了 —— 函数被 replace 会重建触发器订阅，
-期间的告警会丢。
-
-### 升级后 `plan` 出现 `has moved to`
-
-存量飞书部署升级到多渠道版本后，`plan` 会显示两条：
-
-```
-# google_secret_manager_secret_iam_member.webhook_accessor has moved to google_secret_manager_secret_iam_member.secret_accessor["FEISHU_DEFAULT_WEBHOOK"]
-# google_secret_manager_secret_iam_member.sign_accessor has moved to google_secret_manager_secret_iam_member.secret_accessor["FEISHU_DEFAULT_SECRET"]
-```
-
-这是 `terraform/secrets.tf` 里 `moved` 块的预期效果，**不需要**手工 `terraform state mv`。
-`notify_channel` 未设置（= `feishu`）时 IAM 绑定不应有任何 destroy / replace；若看到了，先确认 tfvars 里
-`notify_channel` 与 `feishu_default_*_secret` 的值和升级前一致。切到 wecom / dingtalk 时旧的飞书 accessor 被 destroy 是预期的
-（最小权限），飞书 Secret 本身不会被删除。
-
-### `precondition` 失败：速率超出渠道上限
-
-```
-notify_channel = dingtalk（钉钉）：max_sends_per_minute(40) × max_instances(2) = 80，必须 ≤ 16 ...
-```
-
-tfvars 里显式写了 `max_sends_per_minute`（多半是飞书时代留下的 40）。删掉该行回到 `null`（按渠道推导 8），
-或调低到满足 `速率 × max_instances ≤ 16`。见第 6 节。
-
-### 手工改 `notify_channel` 后 `plan` 在 Secret `data` 源上报 404
-
-切换 `notify_channel` 前必须先让对应渠道的 Secret 存在（由 `deploy-terraform.sh` 收集凭据后创建，Terraform 只 `data` 引用）。
-直接改 tfvars 里的 `notify_channel` 再 `terraform apply`，会因 `wecom-default-webhook` 等 Secret 不存在而在
-`data.google_secret_manager_secret.channel[...]` 上失败 —— 请改用 `NOTIFY_CHANNEL=… ./deploy-terraform.sh` 重跑。
-
-### 切换渠道后的短暂窗口
-
-切换 `notify_channel`（或 `configure.sh --section=channel`）时，Terraform 会销毁旧渠道 Secret 的 `secretAccessor` 绑定并部署新 revision。
-两者之间存在数十秒窗口：若旧 revision 恰在此时冷启动，会因读不到旧 Secret 起不来，对应消息被 nack 后由 Pub/Sub 重投到新 revision，
-一般不会丢。切换后建议看一眼自检结果与 `gcloud logging read 'severity>=ERROR' --freshness=10m`。旧渠道的 Secret 本体会保留，
-确认不再回切后可用 `teardown-gcloud.sh --delete-secrets` 或手工 `gcloud secrets delete` 回收。
-
-### `apply` 在 `google_cloud_run_v2_service_iam_member` 上 403
-
-默认 `run_invoker_scope = "service"` 需要部署者有 `run.services.setIamPolicy`（`roles/run.admin`；
-`roles/editor` 与 `projectIamAdmin` 都不含）。要么补 `run.admin`，要么在 tfvars 设 `run_invoker_scope = "project"`
-改为项目级绑定（只需 `projectIamAdmin`，代价是该 SA 可调用项目内所有 Run 服务）。
-
-### `teardown-gcloud.sh` 拒绝执行
-
-```
-❌ topic gcp-alerts-hub 带有 managed-by=terraform 标签：这是 Terraform 路径部署的环境
-   本脚本只清理 gcloud 路径的资源。请改用：cd terraform && terraform destroy
-```
-
-这是有意的：Terraform 路径的资源归 state 管，用 gcloud 删会留下孤儿 state。
-同理，带 `userLabels.managed-by=terraform` 的告警策略在 teardown 中会被跳过并提示。
-teardown 对告警策略 / 通知渠道只按本仓库固定的 displayName **精确匹配**，不会按前缀误删客户自建的 `Recommended - *`。
-
-### Sink 身份传播延迟导致 apply 报错
-
-Hub 范围模式下，新建的文件夹 / 组织聚合 sink 的写入身份（`service-folder-*@gcp-sa-logging.iam.gserviceaccount.com`）创建后需要一段时间传播。同一次 apply 里紧接着给它授 `roles/logging.logWriter` 时，会报 400 `... gcp-sa-logging.iam.gserviceaccount.com does not exist`。
-`deploy-terraform.sh` 检测到这条报错会等待 60 秒，然后自动再 plan / apply 一次，只应用剩余变更；gcloud 路径用 `soft_step_retry` 对等处理。手动执行 `terraform apply` 遇到时，等待约 60 秒后重跑即可。
-
-### 读不到项目的结算账号（Terraform）
-
-```
-❌ Billing 预算已启用（沿用线上现状），但读不到项目的结算账号。
-   此时若继续，Terraform 会写入 enable_billing=false 并在 apply 中【删除已有预算】，因此中止（未做任何修改）。
-```
-
-`deploy-terraform.sh` 依次尝试 `BILLING_ACCOUNT_ID` 环境变量 → `gcloud billing projects describe` → 本机
-`terraform/terraform.tfvars` 原有的 `billing_account_id`（输出里有一行「Billing：结算账号取自…」）。全都拿不到，且
-Billing 是沿用线上得来的、或线上预算现状为「存在 / 未知」时中止。补救三选一：
-
-1. **授权后重跑**：给部署者授项目上的 `roles/billing.viewer`（管理预算还需结算账号上的 `roles/billing.costsManager`）。
-2. **显式提供结算账号**：`BILLING_ACCOUNT_ID=01ABCD-2345EF-6789AB ./deploy-terraform.sh ...`（可带 `billingAccounts/` 前缀）。
-3. **确实要关闭预算告警**：`ENABLE_BILLING=N ./deploy-terraform.sh ...`（apply 会删除预算）。
-
-只有显式 `ENABLE_BILLING=Y` 且线上本来没有预算（或首次部署）时，才会降级为「已跳过：启用 Terraform 的 Billing 模块」并以退出码 2 结束。
-`configure.sh` 在 Terraform 模式下遇到该情况会显示上述中止信息并报「配置修改未生效」（退出 1），不会 apply。
-gcloud 路径不受影响（只 upsert，读不到结算账号仍是登记跳过）。
-
-### state 丢了
-
-```bash
-gcloud storage ls "gs://${PROJECT_ID}-gcp-feishu-tfstate/terraform/state/"
-# bucket 开了 versioning，可以恢复历史版本
-gcloud storage ls -a "gs://${PROJECT_ID}-gcp-feishu-tfstate/terraform/state/default.tfstate"
-gcloud storage cp "gs://.../default.tfstate#GENERATION" "gs://.../default.tfstate"
-```
-
-实在恢复不了，就按 [deployment-comparison.md](deployment-comparison.md#从-gcloud-迁移到-terraform)
-的 import 清单把现有资源重新导入。
-
----
-
-## 7. 修改配置（configure.sh）与重跑部署
+## 6. 修改配置（configure.sh）与重跑部署
 
 
 ### configure 报「函数不存在」或「在其它区域发现同名函数」

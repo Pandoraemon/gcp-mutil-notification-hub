@@ -64,8 +64,7 @@ usage() {
   交互式修改全部配置请用 ./scripts/configure.sh。
 
 说明:
-  本脚本适合快速体验与个人项目。生产环境请使用 ./deploy-terraform.sh
-  （生命周期管理对比见 docs/deployment-comparison.md）。
+  本脚本是默认部署方式，可直接在 Cloud Shell 中运行（使用说明见 README.md）。
 USAGE
 }
 

@@ -2,7 +2,7 @@
 # Terraform 生产部署路径：约 15 分钟，产出可版本化、可 destroy 的完整基础设施。
 #
 # 与 gcloud 路径功能对等（同样的 topic / DLQ / 函数配置 / 四大数据源），
-# 差别只在生命周期管理方式，见 docs/deployment-comparison.md。
+# 差别只在生命周期管理方式。属于隐藏的高级选项，说明见 docs/internal/terraform.md（仅维护者仓库）。
 set -euo pipefail
 
 cd "$(dirname "$0")"
