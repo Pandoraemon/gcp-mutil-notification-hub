@@ -1,0 +1,47 @@
+# --- 密文与部署产物（最重要的一节）---------------------------------------
+# terraform.tfvars 由 deploy-terraform.sh 生成。虽然设计上它只含 Secret 名称
+# 而不含密文，但用户可能手工往里塞值，因此一律不入库；示例见 terraform.tfvars.example。
+terraform/terraform.tfvars
+# 由 deploy-terraform.sh 按项目生成
+terraform/backend.tf
+*.auto.tfvars
+.env
+*.pem
+*.key
+
+# --- Terraform --------------------------------------------------------------
+.terraform/
+.terraform-tmp/
+*.tfstate
+*.tfstate.*
+crash.log
+tfplan
+# .terraform.lock.hcl 应当入库：它锁定 provider 版本，保证团队与 CI 结果一致
+
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.venv-deps/
+venv/
+
+# --- 测试与覆盖率 -----------------------------------------------------------
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.ruff_cache/
+
+# --- 部署临时文件 -----------------------------------------------------------
+function-source.zip
+src/requirements.txt.bak
+
+# --- 编辑器与系统 -----------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+.DS_Store

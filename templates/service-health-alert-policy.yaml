@@ -1,0 +1,45 @@
+# Personalized Service Health 日志告警策略模板（gcloud 路径使用）—— 已确认故障。
+#
+# 变量由 deploy-gcloud.sh 通过 envsubst 替换，替换后脚本会 grep 残留的 "${"：
+#   ${PROJECT_ID}  项目 ID
+#   ${CHANNEL_ID}  Notification Channel 全名（projects/xxx/notificationChannels/123）
+# 若 CHANNEL_ID 未 export，会生成一个【没有通知渠道】的策略 —— 创建成功但永远不发通知。
+#
+# 这是 conditionMatchedLog（日志匹配）型策略：Service Health 不产生时序指标，
+# 只写 Cloud Logging，因此不能用 conditionThreshold。
+#
+# 字段依据 google.cloud.servicehealth.logging.v1.EventLog：category 只有 INCIDENT，
+# detailedCategory 为 CONFIRMED_INCIDENT / EMERGING_INCIDENT
+# （cloud.google.com/service-health/docs/reference/rest/v1/projects.locations.events#DetailedCategory）。
+# 事件 ID 不在 jsonPayload 里，而在监控资源 servicehealth.googleapis.com/Event 的 event_id 标签上。
+# 与 terraform/service_health.tf 的 service_health 保持一致。
+displayName: "GCP Service Health Incident"
+documentation:
+  content: |-
+    Google Cloud 服务健康事件 —— 已确认故障（Personalized Service Health - Confirmed Incident）。
+    事件日志经本策略 → Pub/Sub topic gcp-alerts-hub → Cloud Functions → ${CHANNEL_LABEL}群。
+    排查：docs/troubleshooting.md
+  mimeType: "text/markdown"
+combiner: OR
+enabled: true
+conditions:
+  - displayName: "Service Health 已确认故障事件日志"
+    conditionMatchedLog:
+      filter: |-
+        resource.type="servicehealth.googleapis.com/Event"
+        AND jsonPayload.category="INCIDENT"
+        AND jsonPayload.detailedCategory="CONFIRMED_INCIDENT"
+      labelExtractors:
+        event_id: EXTRACT(resource.labels.event_id)
+        category: EXTRACT(jsonPayload.category)
+        detailed_category: EXTRACT(jsonPayload.detailedCategory)
+        state: EXTRACT(jsonPayload.state)
+        detailed_state: EXTRACT(jsonPayload.detailedState)
+        relevance: EXTRACT(jsonPayload.relevance)
+        title: EXTRACT(jsonPayload.title)
+alertStrategy:
+  notificationRateLimit:
+    period: 300s
+  autoClose: 604800s
+notificationChannels:
+  - ${CHANNEL_ID}

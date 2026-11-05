@@ -1,0 +1,57 @@
+{#
+  Cloud Monitoring 告警卡片。
+  结构性注意事项（原设计即使值无特殊字符也会产出非法 JSON）：
+  1. 循环元素统一【后置逗号】，并用一个恒定存在的时间戳元素兜底，
+     避免 fields 为空时渲染出以 , 开头的数组；
+  2. console_url 缺省时【不渲染按钮】，而不是填 "#"（飞书会拒绝非法 URL 的按钮）；
+  3. 含告警数据的元素一律 plain_text：| tojson 只保证 JSON 结构安全，不会让
+     [文案](https://evil) 或 <at id=all> 失效。lark_md 仅用于内容完全由本模板写死、
+     不含任何消息字段的行（如"严重性"行：severity 是契约枚举值，不是用户数据）。
+#}
+{
+  "config": {
+    "wide_screen_mode": true
+  },
+  "header": {
+    "title": {
+      "tag": "plain_text",
+      "content": {{ (severity_icon ~ " [Monitoring] " ~ title) | tojson }}
+    },
+    "template": {{ severity_color | tojson }}
+  },
+  "elements": [
+    {
+      "tag": "div",
+      "text": {
+        "tag": "lark_md",
+        "content": {{ ("**严重性**: " ~ severity) | tojson }}
+      }
+    },
+    {%- for key, value in fields.items() %}
+    {
+      "tag": "div",
+      "text": {
+        "tag": "plain_text",
+        "content": {{ (key ~ ": " ~ value) | tojson }}
+      }
+    },
+    {%- endfor %}
+    {
+      "tag": "div",
+      "text": { "tag": "plain_text", "content": {{ ("🕐 " ~ timestamp) | tojson }} }
+    }
+    {%- if console_url %},
+    {
+      "tag": "action",
+      "actions": [
+        {
+          "tag": "button",
+          "text": { "tag": "plain_text", "content": "查看事件详情" },
+          "url": {{ console_url | tojson }},
+          "type": "primary"
+        }
+      ]
+    }
+    {%- endif %}
+  ]
+}

@@ -1,0 +1,26 @@
+# 推荐默认告警：GCE 宿主机硬件故障与维护迁移事件（System Event 审计日志）。
+displayName: "Recommended - GCE Host Error & Maintenance Event"
+documentation:
+  content: |-
+    GCE 虚拟机发生宿主机硬件故障（hostError）、计划维护热迁移/终止（migrateOnHostMaintenance / terminateOnHostMaintenance）或异常重启（automaticRestart）。
+    排查：查看 Cloud Logging 系统事件（cloudaudit.googleapis.com/system_event）。
+  mimeType: "text/markdown"
+combiner: OR
+severity: WARNING
+enabled: true
+conditions:
+  - displayName: "GCE System Event (hostError / maintenance / automaticRestart)"
+    conditionMatchedLog:
+      filter: |-
+        LOG_ID("cloudaudit.googleapis.com/system_event")
+        AND resource.type="gce_instance"
+        AND (protoPayload.methodName="compute.instances.hostError"
+             OR protoPayload.methodName="compute.instances.migrateOnHostMaintenance"
+             OR protoPayload.methodName="compute.instances.terminateOnHostMaintenance"
+             OR protoPayload.methodName="compute.instances.automaticRestart")
+alertStrategy:
+  notificationRateLimit:
+    period: 300s
+  autoClose: 86400s
+notificationChannels:
+  - ${CHANNEL_ID}

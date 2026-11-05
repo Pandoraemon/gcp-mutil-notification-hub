@@ -1,0 +1,48 @@
+{# 部署自检卡片。标题固定带 🟢，与 lib/common.sh 中 run_self_test 的提示文案一致。 #}
+{
+  "config": {
+    "wide_screen_mode": true
+  },
+  "header": {
+    "title": {
+      "tag": "plain_text",
+      "content": {{ ("🟢 [GCP 监控告警中心] " ~ title) | tojson }}
+    },
+    "template": {{ severity_color | tojson }}
+  },
+  "elements": [
+    {
+      "tag": "div",
+      "text": {
+        "tag": "lark_md",
+        "content": "本条为部署自检消息，收到即表示 **Pub/Sub → Cloud Functions → 飞书** 链路已打通。"
+      }
+    },
+    {%- for key, value in fields.items() %}
+    {
+      "tag": "div",
+      "text": {
+        "tag": "plain_text",
+        "content": {{ (key ~ ": " ~ value) | tojson }}
+      }
+    },
+    {%- endfor %}
+    {
+      "tag": "div",
+      "text": { "tag": "plain_text", "content": {{ ("🕐 " ~ timestamp) | tojson }} }
+    }
+    {%- if console_url %},
+    {
+      "tag": "action",
+      "actions": [
+        {
+          "tag": "button",
+          "text": { "tag": "plain_text", "content": "查看函数" },
+          "url": {{ console_url | tojson }},
+          "type": "primary"
+        }
+      ]
+    }
+    {%- endif %}
+  ]
+}

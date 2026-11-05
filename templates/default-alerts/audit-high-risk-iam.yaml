@@ -1,0 +1,31 @@
+# 推荐默认告警：高危 IAM 权限变更审计告警（Owner/Editor/SecurityAdmin 或公开访问）。
+displayName: "Recommended - High-Risk IAM Policy Change"
+documentation:
+  content: |-
+    检测到项目级高危 IAM 策略变更（授予 roles/owner、roles/editor、roles/iam.securityAdmin，或向 allUsers / allAuthenticatedUsers 开放权限）。
+    请立即核查 Cloud Audit Logs 中的操作人（principalEmail）与变更上下文。
+  mimeType: "text/markdown"
+combiner: OR
+severity: ERROR
+enabled: true
+conditions:
+  - displayName: "High-Risk SetIamPolicy Audit Log"
+    conditionMatchedLog:
+      filter: |-
+        LOG_ID("cloudaudit.googleapis.com/activity")
+        AND protoPayload.methodName="SetIamPolicy"
+        AND (NOT protoPayload.status.code:* OR protoPayload.status.code=0)
+        AND protoPayload.serviceData.policyDelta.bindingDeltas.action="ADD"
+        AND (protoPayload.serviceData.policyDelta.bindingDeltas.role="roles/owner"
+             OR protoPayload.serviceData.policyDelta.bindingDeltas.role="roles/editor"
+             OR protoPayload.serviceData.policyDelta.bindingDeltas.role="roles/iam.securityAdmin"
+             OR protoPayload.serviceData.policyDelta.bindingDeltas.member:"allUsers"
+             OR protoPayload.serviceData.policyDelta.bindingDeltas.member:"allAuthenticatedUsers")
+      labelExtractors:
+        principal_email: EXTRACT(protoPayload.authenticationInfo.principalEmail)
+alertStrategy:
+  notificationRateLimit:
+    period: 300s
+  autoClose: 86400s
+notificationChannels:
+  - ${CHANNEL_ID}

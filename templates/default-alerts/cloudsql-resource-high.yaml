@@ -1,0 +1,42 @@
+# 推荐默认告警：Cloud SQL 实例 CPU / 内存 / 磁盘空间高水位（> 85%）。
+displayName: "Recommended - Cloud SQL CPU / Memory / Disk High"
+severity: WARNING
+documentation:
+  content: |-
+    Cloud SQL 数据库实例 CPU、内存或磁盘空间使用率连续 5 分钟超过 85%。
+    建议检查慢查询（Query Insights）、连接数池化配置或开启存储自动扩容。
+  mimeType: "text/markdown"
+combiner: OR
+enabled: true
+conditions:
+  - displayName: "Cloud SQL CPU Utilization > 85% (5m)"
+    conditionThreshold:
+      filter: 'resource.type = "cloudsql_database" AND metric.type = "cloudsql.googleapis.com/database/cpu/utilization"'
+      comparison: COMPARISON_GT
+      thresholdValue: 0.85
+      duration: 300s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_MEAN
+  - displayName: "Cloud SQL Memory Utilization > 85% (5m)"
+    conditionThreshold:
+      filter: 'resource.type = "cloudsql_database" AND metric.type = "cloudsql.googleapis.com/database/memory/utilization"'
+      comparison: COMPARISON_GT
+      thresholdValue: 0.85
+      duration: 300s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_MEAN
+  - displayName: "Cloud SQL Disk Utilization > 85% (5m)"
+    conditionThreshold:
+      filter: 'resource.type = "cloudsql_database" AND metric.type = "cloudsql.googleapis.com/database/disk/utilization"'
+      comparison: COMPARISON_GT
+      thresholdValue: 0.85
+      duration: 300s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_MEAN
+alertStrategy:
+  autoClose: 86400s
+notificationChannels:
+  - ${CHANNEL_ID}

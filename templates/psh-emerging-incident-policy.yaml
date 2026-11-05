@@ -1,0 +1,39 @@
+# Personalized Service Health 新兴故障早期预警策略模板（Emerging Incident）。
+#
+# 变量由 deploy-gcloud.sh 通过 envsubst 替换：
+#   ${PROJECT_ID}  项目 ID
+#   ${CHANNEL_ID}  Notification Channel 全名
+#
+# 字段依据 google.cloud.servicehealth.logging.v1.EventLog：category 只有 INCIDENT，
+# 「新兴」由 detailedCategory = EMERGING_INCIDENT 区分（不存在 category = EMERGING_INCIDENT）。
+# 与 terraform/service_health.tf 的 service_health_emerging 保持一致。
+displayName: "GCP Service Health Emerging Incident"
+documentation:
+  content: |-
+    Google Cloud 服务健康事件 —— 新兴故障早期预警（Personalized Service Health - Emerging Incident）。
+    当 Google SRE 初步探测到潜在服务异常（尚未完全确认影响面）时立即触发预警。
+    事件日志经本策略 → Pub/Sub topic gcp-alerts-hub → Cloud Functions → ${CHANNEL_LABEL}群。
+  mimeType: "text/markdown"
+combiner: OR
+enabled: true
+conditions:
+  - displayName: "Service Health 新兴故障事件日志"
+    conditionMatchedLog:
+      filter: |-
+        resource.type="servicehealth.googleapis.com/Event"
+        AND jsonPayload.category="INCIDENT"
+        AND jsonPayload.detailedCategory="EMERGING_INCIDENT"
+      labelExtractors:
+        event_id: EXTRACT(resource.labels.event_id)
+        category: EXTRACT(jsonPayload.category)
+        detailed_category: EXTRACT(jsonPayload.detailedCategory)
+        state: EXTRACT(jsonPayload.state)
+        detailed_state: EXTRACT(jsonPayload.detailedState)
+        relevance: EXTRACT(jsonPayload.relevance)
+        title: EXTRACT(jsonPayload.title)
+alertStrategy:
+  notificationRateLimit:
+    period: 300s
+  autoClose: 604800s
+notificationChannels:
+  - ${CHANNEL_ID}

@@ -1,0 +1,20 @@
+resource.type="servicehealth.googleapis.com/Event"
+OR (LOG_ID("cloudaudit.googleapis.com/activity")
+AND protoPayload.methodName="SetIamPolicy"
+AND (NOT protoPayload.status.code:* OR protoPayload.status.code=0)
+AND protoPayload.serviceData.policyDelta.bindingDeltas.action="ADD"
+AND (protoPayload.serviceData.policyDelta.bindingDeltas.role="roles/owner"
+     OR protoPayload.serviceData.policyDelta.bindingDeltas.role="roles/editor"
+     OR protoPayload.serviceData.policyDelta.bindingDeltas.role="roles/iam.securityAdmin"
+     OR protoPayload.serviceData.policyDelta.bindingDeltas.member:"allUsers"
+     OR protoPayload.serviceData.policyDelta.bindingDeltas.member:"allAuthenticatedUsers"))
+OR (LOG_ID("cloudaudit.googleapis.com/activity")
+AND protoPayload.methodName="google.iam.admin.v1.CreateServiceAccountKey"
+AND (NOT protoPayload.status.code:* OR protoPayload.status.code=0))
+OR (LOG_ID("cloudaudit.googleapis.com/system_event")
+AND resource.type="gce_instance"
+AND (protoPayload.methodName="compute.instances.hostError"
+     OR protoPayload.methodName="compute.instances.migrateOnHostMaintenance"
+     OR protoPayload.methodName="compute.instances.terminateOnHostMaintenance"
+     OR protoPayload.methodName="compute.instances.automaticRestart"
+     OR protoPayload.methodName="compute.instances.upcomingMaintenance"))

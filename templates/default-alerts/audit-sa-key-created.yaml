@@ -1,0 +1,25 @@
+# 推荐默认告警：Service Account 用户托管密钥（JSON Key）创建审计告警。
+displayName: "Recommended - Service Account Key Created"
+documentation:
+  content: |-
+    检测到创建了新的 Service Account 持久化密钥（CreateServiceAccountKey）。
+    静态 JSON 密钥存在极高的泄露风险，建议改用 Workload Identity Federation 或短效凭据（Service Account Impersonation）。
+  mimeType: "text/markdown"
+combiner: OR
+severity: ERROR
+enabled: true
+conditions:
+  - displayName: "CreateServiceAccountKey Audit Log"
+    conditionMatchedLog:
+      filter: |-
+        LOG_ID("cloudaudit.googleapis.com/activity")
+        AND protoPayload.methodName="google.iam.admin.v1.CreateServiceAccountKey"
+        AND (NOT protoPayload.status.code:* OR protoPayload.status.code=0)
+      labelExtractors:
+        principal_email: EXTRACT(protoPayload.authenticationInfo.principalEmail)
+alertStrategy:
+  notificationRateLimit:
+    period: 300s
+  autoClose: 86400s
+notificationChannels:
+  - ${CHANNEL_ID}

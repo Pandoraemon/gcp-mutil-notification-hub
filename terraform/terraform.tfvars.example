@@ -1,0 +1,104 @@
+# terraform.tfvars 示例。
+#
+# 正常流程无需手工创建：deploy-terraform.sh 会根据交互输入生成 terraform.tfvars。
+# 本文件用于说明各字段含义，或用于 CI 中固定配置的场景。
+#
+# ⚠️ 这里【不放任何密文】。webhook URL 与签名密钥的值由部署脚本写入 Secret Manager，
+#    tfvars 只记录 Secret 的【名称】。真实的 terraform.tfvars 已在 .gitignore 中忽略。
+
+project_id = "my-gcp-project"
+region     = "asia-east1"
+
+# --- PSH 与推荐默认监控告警包 -----------------------------------------------
+# 默认开启 PSH 日志告警策略集（两类：已确认故障 Confirmed Incident / 新兴故障 Emerging Incident）。
+# PSH 事件日志只产出 category=INCIDENT，计划维护 / 安全公告在该数据源上不存在，故不提供。
+enable_psh            = true
+# 是否一键开启推荐默认监控告警包（GCE / 配额 / LB & NAT / GKE & Cloud SQL / 高危 IAM 审计）
+enable_default_alerts = false
+
+# --- 自监控（监控的监控）---------------------------------------------------
+# IM 链路自身故障（webhook 失效导致的永久发送失败 / DLQ 积压）的邮件收件人。
+# 留空则不创建自监控资源。刻意只走邮件：IM 机器人正是这类故障里坏掉的那一环。
+ops_email = ""
+
+# --- 可选数据源 -------------------------------------------------------------
+# 启用 SCC 需要组织级权限（roles/securitycenter.notificationConfigEditor）
+enable_scc          = false
+scc_organization_id = "" # 形如 "123456789012"，enable_scc = true 时必填
+
+# 启用 Billing 需要 roles/billing.admin
+# 警告：已启用后改回 false，apply 会销毁该预算本身（不只是停止通知）
+enable_billing     = false
+billing_account_id = ""    # 形如 "01ABCD-2345EF-6789AB"，不含 billingAccounts/ 前缀
+billing_amount     = "100" # 月度预算金额（整数）
+billing_currency   = "USD"
+
+# --- 通知渠道（单平台三选一）-----------------------------------------------
+# feishu（默认，存量部署零变化）/ wecom（企业微信群机器人）/ dingtalk（钉钉自定义机器人）。
+# default / security / billing 三个路由组都走同一渠道；只有本渠道的 Secret 会被引用与授权。
+notify_channel = "feishu"
+
+# --- 渠道凭据（只填 Secret 名称，不填值；Secret 由部署脚本创建）-----------------
+# feishu：webhook + 签名密钥（未开启签名校验时 Secret 值为 NONE）
+feishu_default_webhook_secret = "feishu-default-webhook"
+feishu_default_sign_secret    = "feishu-default-secret"
+# wecom：只有 webhook（企业微信群机器人无签名机制）
+# wecom_default_webhook_secret = "wecom-default-webhook"
+# dingtalk：webhook + 加签密钥（未开启加签、改用关键词 / IP 安全设置时 Secret 值为 NONE）
+# dingtalk_default_webhook_secret = "dingtalk-default-webhook"
+# dingtalk_default_sign_secret    = "dingtalk-default-secret"
+
+# --- 运行时行为 -------------------------------------------------------------
+# INFO 是有意的默认值：WARNING 会连"告警被过滤""发送成功"一起关掉，
+# 而这两条恰恰是排查"为什么没收到告警"的唯一信号。
+log_level    = "INFO"
+min_severity = "MEDIUM"
+
+# 按来源设置独立阈值（覆盖 min_severity）。缺失的 key 会自动回退到全局 min_severity。
+# 合法 key: monitoring, service_health, billing, scc
+# 合法 value: OFF, CRITICAL, HIGH, MEDIUM, LOW, INFO（大小写不敏感）
+# source_min_severity = {
+#   monitoring = "HIGH"
+#   billing    = "OFF"
+# }
+
+# 出速率约束：max_sends_per_minute × max_instances ≤ 渠道上限（平台限流 × 80%）：
+#   feishu 80（100/min）/ wecom 16（20/min，超限 errcode 45009）/ dingtalk 16（20/min，超限 130101 且封 10 分钟）。
+# 违反此约束时 terraform plan 会直接失败。
+# max_sends_per_minute 不设置（null）时按渠道取默认值：feishu 40 / wecom 8 / dingtalk 8。
+# max_sends_per_minute = 40
+max_instances = 2
+
+# 投递失败多少次后转入 DLQ（Pub/Sub 硬限制 5–100）
+dlq_max_delivery_attempts = 5
+
+# 运行时急停 / 暂停开关（注入为函数环境变量 KILL_SWITCH / PAUSE_MODE）。
+# emergency-disable.sh / emergency-pause.sh 改的是底层 Cloud Run 服务，下一次 terraform apply
+# 会按这里的值【复位】。要让急停跨 apply 持久，必须改这里而不是只跑脚本。
+kill_switch = false
+pause_mode  = false
+
+# 配置修订号（注入为函数环境变量 CONFIG_REVISION）。scripts/configure.sh 每次应用时写入新的 UTC 时间戳，
+# 强制函数拉新 revision（使 Secret 的 latest 版本被重新解析）。留空 = 不注入，存量部署无变化。
+config_revision = ""
+
+# --- IAM 层级 ---------------------------------------------------------------
+# 触发器身份（函数 SA）的 roles/run.invoker 授在哪一级：
+#   service（默认，最小权限）需要部署者有 run.services.setIamPolicy（roles/run.admin）
+#   project 只需 resourcemanager.projects.setIamPolicy，但该 SA 可调用项目内所有 Run 服务
+run_invoker_scope = "service"
+
+# --- 资源命名（一般无需修改；改了要同步 scripts/ 里的默认值）---------------
+# topic_name            = "gcp-alerts-hub"
+# dlq_topic_name        = "gcp-alerts-dlq"
+# dlq_subscription_name = "gcp-alerts-dlq-sub"
+# function_name         = "gcp-alerts-to-feishu"
+# service_account_id    = "gcp-alerts-fn"
+
+# --- 多项目汇聚（Hub 模式） -----------------------------------------------
+# 已接入的源项目清单（按项目 ID）。为空时 = 非 Hub 模式。
+# 不得包含 Hub 项目自身。
+source_projects = []
+
+# 设置后日志改走聚合 sink（不再逐项目建 sink）。支持 folders/123 或 organizations/456。
+source_scope = ""

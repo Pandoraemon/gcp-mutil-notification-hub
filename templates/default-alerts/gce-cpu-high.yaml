@@ -1,0 +1,24 @@
+# 推荐默认告警：GCE 实例 CPU 高负载（持续 5 分钟 > 85%）。
+displayName: "Recommended - GCE High CPU Utilization"
+severity: WARNING
+documentation:
+  content: |-
+    GCE 虚拟机 CPU 平均使用率连续 5 分钟超过 85%。
+    建议检查实例内高 CPU 进程、机器规格是否不足或 MIG 自动扩缩容配置。
+  mimeType: "text/markdown"
+combiner: OR
+enabled: true
+conditions:
+  - displayName: "GCE VM CPU Utilization > 85% (5m)"
+    conditionThreshold:
+      filter: 'resource.type = "gce_instance" AND metric.type = "compute.googleapis.com/instance/cpu/utilization"'
+      comparison: COMPARISON_GT
+      thresholdValue: 0.85
+      duration: 300s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_MEAN
+alertStrategy:
+  autoClose: 86400s
+notificationChannels:
+  - ${CHANNEL_ID}

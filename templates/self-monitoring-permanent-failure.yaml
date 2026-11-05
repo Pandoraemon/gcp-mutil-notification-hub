@@ -1,0 +1,42 @@
+# 自监控告警：告警转发函数记录了【永久发送失败】（IM 机器人 webhook 失效 / 签名错误 / 业务码非 0）。
+#
+# 变量由 deploy-gcloud.sh 通过 envsubst 替换：
+#   ${PROJECT_ID}             项目 ID
+#   ${FUNCTION_NAME}          函数名（= 底层 Cloud Run 服务名）
+#   ${EMAIL_CHANNEL_ID}       邮件 Notification Channel 全名（projects/xxx/notificationChannels/123）
+#
+# 通知渠道【只用邮件】：IM 机器人正是这类故障里坏掉的那一环，再经它通知等于没通知，
+# 也避免形成「发送失败 → 告警 → 又去 IM 群发送 → 又失败」的回环。
+#
+# 日志由 src/main.py 的 logger.exception(..., extra={'reason': 'permanent_send_failure'}) 产生，
+# StructuredFormatter 把 extra 键放在 JSON 顶层 → Cloud Logging 解析为 jsonPayload.reason。
+# Gen2 函数的日志挂在底层 Cloud Run 服务上：resource.type = cloud_run_revision。
+# 与 terraform/self_monitoring.tf 的 self_permanent_send_failure 保持一致。
+displayName: "GCP Alerts Hub - Permanent Send Failure"
+severity: CRITICAL
+documentation:
+  content: |-
+    告警转发函数 ${FUNCTION_NAME} 记录了【永久发送失败】：${CHANNEL_LABEL} webhook 已失效、签名密钥错误，
+    或${CHANNEL_LABEL}返回非 0 业务码。此类消息按设计不会重试、不会进 DLQ —— 在修复前所有告警都在静默丢失。
+    排查：
+      gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="${FUNCTION_NAME}" AND jsonPayload.reason="permanent_send_failure"' --project=${PROJECT_ID} --limit=20
+    修复 webhook 后需拉新 revision（Secret 以 :latest 挂载，只在实例启动时解析）。详见 docs/troubleshooting.md
+  mimeType: "text/markdown"
+combiner: OR
+enabled: true
+conditions:
+  - displayName: "Function log: permanent_send_failure"
+    conditionMatchedLog:
+      filter: |-
+        resource.type="cloud_run_revision"
+        AND resource.labels.service_name="${FUNCTION_NAME}"
+        AND jsonPayload.reason="permanent_send_failure"
+      labelExtractors:
+        alert_type: EXTRACT(jsonPayload.alert_type)
+        message_id: EXTRACT(jsonPayload.message_id)
+alertStrategy:
+  notificationRateLimit:
+    period: 3600s
+  autoClose: 86400s
+notificationChannels:
+  - ${EMAIL_CHANNEL_ID}

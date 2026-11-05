@@ -1,0 +1,26 @@
+# 推荐默认告警：GCE & GPU 宿主机计划维护提前预警（System Event 审计日志）。
+displayName: "Recommended - GCE & GPU Upcoming Host Maintenance"
+documentation:
+  content: |-
+    检测到 GCE / GPU 实例（如 A3 / A4 / A4X / G2 等不支持热迁移的机型；注意 G2 / A2 等通用 GPU 机型维护终止会清空临时 Local SSD）排入计划宿主机维护窗口（compute.instances.upcomingMaintenance，通常提前 1 小时至 7–90 天通知）。
+    建议及时持久化 Checkpoint，并在业务低峰期执行 gcloud compute instances perform-maintenance 或 gcloud compute reservations perform-maintenance 主动维护。
+  mimeType: "text/markdown"
+combiner: OR
+severity: ERROR
+enabled: true
+conditions:
+  - displayName: "GCE Upcoming Maintenance Audit Log"
+    conditionMatchedLog:
+      filter: |-
+        LOG_ID("cloudaudit.googleapis.com/system_event")
+        AND resource.type="gce_instance"
+        AND protoPayload.methodName="compute.instances.upcomingMaintenance"
+        AND NOT protoPayload.status.message=~"completed"
+      labelExtractors:
+        maintenance_status: EXTRACT(protoPayload.status.message)
+alertStrategy:
+  notificationRateLimit:
+    period: 300s
+  autoClose: 86400s
+notificationChannels:
+  - ${CHANNEL_ID}

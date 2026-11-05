@@ -1,0 +1,24 @@
+# 推荐默认告警：HTTP(S) 负载均衡后端 5xx 错误率升高。
+displayName: "Recommended - HTTP Load Balancer 5xx Error Spike"
+severity: ERROR
+documentation:
+  content: |-
+    Cloud HTTP(S) Load Balancer 返回 5xx 响应的速率持续 3 分钟超过 1 req/s。
+    请检查后端服务健康状态、实例组容量及 Cloud Logging 中的负载均衡状态详情（statusDetails）。
+  mimeType: "text/markdown"
+combiner: OR
+enabled: true
+conditions:
+  - displayName: "HTTPS LB 5xx Request Rate > 1 req/s (3m)"
+    conditionThreshold:
+      filter: 'resource.type = "https_lb_rule" AND metric.type = "loadbalancing.googleapis.com/https/request_count" AND metric.labels.response_code_class = "500"'
+      comparison: COMPARISON_GT
+      thresholdValue: 1.0
+      duration: 180s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_RATE
+alertStrategy:
+  autoClose: 86400s
+notificationChannels:
+  - ${CHANNEL_ID}

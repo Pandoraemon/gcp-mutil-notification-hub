@@ -1,0 +1,24 @@
+# 推荐默认告警：GCE 磁盘空间不足（Ops Agent 磁盘已用比例 > 85% 持续 5 分钟）。
+displayName: "Recommended - GCE Disk Space High Utilization"
+severity: WARNING
+documentation:
+  content: |-
+    GCE 虚拟机磁盘已用空间超过 85%（需实例已安装 Ops Agent 上报 agent.googleapis.com/disk/percent_used）。
+    建议及时清理日志/临时文件或在线扩容 Persistent Disk / Hyperdisk。
+  mimeType: "text/markdown"
+combiner: OR
+enabled: true
+conditions:
+  - displayName: "GCE Disk Percent Used > 85% (5m)"
+    conditionThreshold:
+      filter: 'resource.type = "gce_instance" AND metric.type = "agent.googleapis.com/disk/percent_used" AND metric.labels.state = "used"'
+      comparison: COMPARISON_GT
+      thresholdValue: 85.0
+      duration: 300s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_MEAN
+alertStrategy:
+  autoClose: 86400s
+notificationChannels:
+  - ${CHANNEL_ID}

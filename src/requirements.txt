@@ -1,0 +1,13 @@
+# 运行时依赖：精确锁定至【已修补】版本（含传递依赖，保证两次部署产出同一个镜像）。
+# 最后一次 pip-audit 通过：2026-09-10。更新方式见 scripts/update-dependencies.sh（内置 pip-audit 门禁）。
+functions-framework==3.10.2
+cloudevents==1.12.0
+# Jinja2 必须 >= 3.1.6：更早版本存在多个已披露的沙箱逃逸 CVE
+Jinja2==3.1.6
+MarkupSafe==3.0.3
+# requests / urllib3 / idna 的下限由 pip-audit 决定，不要为了"稳"而回退版本
+requests==2.34.2
+urllib3==2.7.0
+certifi==2026.7.22
+charset-normalizer==3.5.1
+idna==3.19

@@ -1,0 +1,33 @@
+# 推荐默认告警：GKE 容器异常重启与内存逼近 Limit（OOM 风险）。
+displayName: "Recommended - GKE Container Restart & Memory High"
+severity: WARNING
+documentation:
+  content: |-
+    GKE 容器在 5 分钟内重启超过 3 次（常见于 CrashLoopBackOff / OOMKilled），或内存使用率超过 Limit 的 90%。
+    建议检查 Pod 事件（kubectl describe pod）及容器内存 requests/limits 配置。
+  mimeType: "text/markdown"
+combiner: OR
+enabled: true
+conditions:
+  - displayName: "GKE Container Restart Count > 3 (5m)"
+    conditionThreshold:
+      filter: 'resource.type = "k8s_container" AND metric.type = "kubernetes.io/container/restart_count"'
+      comparison: COMPARISON_GT
+      thresholdValue: 3
+      duration: 300s
+      aggregations:
+        - alignmentPeriod: 300s
+          perSeriesAligner: ALIGN_DELTA
+  - displayName: "GKE Container Memory Limit Utilization > 90% (5m)"
+    conditionThreshold:
+      filter: 'resource.type = "k8s_container" AND metric.type = "kubernetes.io/container/memory/limit_utilization"'
+      comparison: COMPARISON_GT
+      thresholdValue: 0.90
+      duration: 300s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_MEAN
+alertStrategy:
+  autoClose: 86400s
+notificationChannels:
+  - ${CHANNEL_ID}

@@ -1,0 +1,49 @@
+# 推荐默认告警：Cloud NAT 端口分配失败与丢包告警。
+#
+# 指标 kind/valueType 依据 cloud.google.com/monitoring/api/metrics_gcp_p_z#gcp-router：
+#   nat/nat_allocation_failed          GAUGE, BOOL   → 只能用 ALIGN_COUNT_TRUE / ALIGN_FRACTION_TRUE
+#   nat/dropped_sent_packets_count     DELTA, INT64  → ALIGN_RATE
+#   nat/dropped_received_packets_count DELTA, INT64  → ALIGN_RATE
+# 不存在 nat/dropped_packets_count；metric.type 过滤器也不支持 one_of()，因此丢包拆成两条 condition。
+# 与 terraform/default_alerts.tf 的 rec_network_cloud_nat 保持一致。
+displayName: "Recommended - Cloud NAT Port Exhaustion & Packet Drops"
+severity: ERROR
+documentation:
+  content: |-
+    Cloud NAT 网关发生端口/IP 分配失败（nat_allocation_failed）或丢包（dropped_sent_packets_count / dropped_received_packets_count）。
+    建议开启动态端口分配（Dynamic Port Allocation）、调高最大端口数或增加 NAT IP 数量。
+  mimeType: "text/markdown"
+combiner: OR
+enabled: true
+conditions:
+  - displayName: "Cloud NAT Port Allocation Failed > 0"
+    conditionThreshold:
+      filter: 'resource.type = "nat_gateway" AND metric.type = "router.googleapis.com/nat/nat_allocation_failed"'
+      comparison: COMPARISON_GT
+      thresholdValue: 0
+      duration: 60s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_COUNT_TRUE
+  - displayName: "Cloud NAT Dropped Sent Packets > 0"
+    conditionThreshold:
+      filter: 'resource.type = "nat_gateway" AND metric.type = "router.googleapis.com/nat/dropped_sent_packets_count"'
+      comparison: COMPARISON_GT
+      thresholdValue: 0
+      duration: 60s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_RATE
+  - displayName: "Cloud NAT Dropped Received Packets > 0"
+    conditionThreshold:
+      filter: 'resource.type = "nat_gateway" AND metric.type = "router.googleapis.com/nat/dropped_received_packets_count"'
+      comparison: COMPARISON_GT
+      thresholdValue: 0
+      duration: 60s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_RATE
+alertStrategy:
+  autoClose: 86400s
+notificationChannels:
+  - ${CHANNEL_ID}

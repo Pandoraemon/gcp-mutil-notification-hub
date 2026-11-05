@@ -1,0 +1,36 @@
+# 自监控告警：死信订阅（DLQ）有未处理消息持续超过 10 分钟。
+#
+# 变量由 deploy-gcloud.sh 通过 envsubst 替换：
+#   ${PROJECT_ID}             项目 ID
+#   ${DLQ_SUBSCRIPTION_NAME}  死信订阅名（与 Terraform 变量 dlq_subscription_name 同名）
+#   ${EMAIL_CHANNEL_ID}       邮件 Notification Channel 全名
+#
+# pubsub.googleapis.com/subscription/num_undelivered_messages 是 GAUGE / INT64
+# （cloud.google.com/monitoring/api/metrics_gcp_p_z#gcp-pubsub）；对死信订阅而言任何 > 0
+# 持续 10 分钟都意味着有告警没送到 IM 群且无人处理（scripts/replay-dlq.sh）。
+# 通知渠道【只用邮件】，理由同 self-monitoring-permanent-failure.yaml。
+# 与 terraform/self_monitoring.tf 的 self_dlq_backlog 保持一致。
+displayName: "GCP Alerts Hub - DLQ Backlog"
+severity: ERROR
+documentation:
+  content: |-
+    死信订阅 ${DLQ_SUBSCRIPTION_NAME}（项目 ${PROJECT_ID}）中有未处理消息持续超过 10 分钟：
+    这些告警已重试到死信上限仍未送达${CHANNEL_LABEL}。
+    处理：先确认${CHANNEL_LABEL}侧已恢复，再运行 ./scripts/replay-dlq.sh 重放。详见 docs/troubleshooting.md
+  mimeType: "text/markdown"
+combiner: OR
+enabled: true
+conditions:
+  - displayName: "DLQ num_undelivered_messages > 0 (10m)"
+    conditionThreshold:
+      filter: 'resource.type = "pubsub_subscription" AND resource.labels.subscription_id = "${DLQ_SUBSCRIPTION_NAME}" AND metric.type = "pubsub.googleapis.com/subscription/num_undelivered_messages"'
+      comparison: COMPARISON_GT
+      thresholdValue: 0
+      duration: 600s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_MAX
+alertStrategy:
+  autoClose: 86400s
+notificationChannels:
+  - ${EMAIL_CHANNEL_ID}
